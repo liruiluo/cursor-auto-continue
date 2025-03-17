@@ -461,18 +461,28 @@ function getAutoContScript(waitTimeMs: number): string {
           
           // Try multiple methods to continue
           
-          // Method 1: Resume links
-          document.querySelectorAll('.markdown-link[data-link*="resumeCurrentChat"], [data-link*="resumeCurrentChat"], a[href*="resumeCurrentChat"]').forEach(link => {
-            if (!clicked) {
-              try {
+          // Method 1: Resume links with specific classes and data attributes
+          try {
+            const resumeLinks = [
+              ...document.querySelectorAll('.markdown-link[data-link*="resumeCurrentChat"]'),
+              ...document.querySelectorAll('.markdown-link[data-link*="composer.resumeCurrentChat"]'),
+              ...document.querySelectorAll('[data-link*="resumeCurrentChat"]'),
+              ...document.querySelectorAll('[data-link*="composer.resumeCurrentChat"]'),
+              ...document.querySelectorAll('a[href*="resumeCurrentChat"]'),
+              ...document.querySelectorAll('span.markdown-link')
+            ];
+            
+            for (const link of resumeLinks) {
+              if (!clicked) {
                 link.click();
                 clicked = true;
-                console.log('[Auto-Continue] Clicked resume link');
-              } catch (e) {
-                console.error('[Auto-Continue] Error clicking link:', e);
+                console.log('[Auto-Continue] Clicked resume link:', link);
+                break;
               }
             }
-          });
+          } catch (e) {
+            console.error('[Auto-Continue] Error clicking specific link:', e);
+          }
           
           // Method 2: Elements with resume text
           if (!clicked) {
@@ -540,32 +550,54 @@ function getAutoContScript(waitTimeMs: number): string {
         window.__AUTO_CONTINUE_OBSERVER = new MutationObserver(mutations => {
           if (isWaiting) return;
           
-          mutations.forEach(mutation => {
+          for (const mutation of mutations) {
             if (mutation.addedNodes && mutation.addedNodes.length > 0) {
-              const toolCallSelectors = [
-                '.markdown-section',
-                '[data-markdown-raw*="tool calls"]',
-                '[data-section-index]',
-                'section',
-                'span.markdown-link',
-                'a[data-link*="resumeCurrentChat"]'
-              ];
+              // Check for the tool call limit message in various ways
+              // 1. Check for the specific text pattern
+              const sections = document.querySelectorAll('.markdown-section, section');
+              for (const section of sections) {
+                const text = section.textContent || '';
+                const rawAttr = section.getAttribute('data-markdown-raw') || '';
+                
+                if (text.includes('default stop the agent after') || 
+                    text.includes('tool calls') ||
+                    rawAttr.includes('default stop the agent after') || 
+                    rawAttr.includes('tool calls')) {
+                  console.log('[Auto-Continue] Found tool call limit message:', text);
+                  handleToolCallLimit();
+                  return;
+                }
+              }
               
-              for (const selector of toolCallSelectors) {
-                document.querySelectorAll(selector).forEach(el => {
-                  const text = el.textContent || '';
-                  const attr = el.getAttribute('data-markdown-raw') || '';
-                  const dataLink = el.getAttribute('data-link') || '';
-                  
-                  if ((text.includes('tool calls') || attr.includes('tool calls')) ||
-                      (text.includes('resume') || dataLink.includes('resumeCurrentChat'))) {
-                    handleToolCallLimit();
-                    return;
-                  }
-                });
+              // 2. Check for resume links
+              const resumeLinks = document.querySelectorAll('.markdown-link[data-link*="resumeCurrentChat"], .markdown-link[data-link*="composer.resumeCurrentChat"], span.markdown-link');
+              for (const link of resumeLinks) {
+                const text = link.textContent || '';
+                const dataLink = link.getAttribute('data-link') || '';
+                
+                if (text.toLowerCase().includes('resume') || 
+                    dataLink.includes('resumeCurrentChat') || 
+                    dataLink.includes('composer.resumeCurrentChat')) {
+                  console.log('[Auto-Continue] Found resume link:', text, dataLink);
+                  handleToolCallLimit();
+                  return;
+                }
+              }
+              
+              // 3. Check for the "anysphere-markdown-container-root" which contains the message
+              const containers = document.querySelectorAll('.anysphere-markdown-container-root');
+              for (const container of containers) {
+                const text = container.textContent || '';
+                if (text.includes('default stop the agent after') || 
+                    text.includes('tool calls') || 
+                    text.includes('resume the conversation')) {
+                  console.log('[Auto-Continue] Found tool call container:', text);
+                  handleToolCallLimit();
+                  return;
+                }
               }
             }
-          });
+          }
         });
         
         window.__AUTO_CONTINUE_OBSERVER.observe(container, { 
@@ -576,6 +608,37 @@ function getAutoContScript(waitTimeMs: number): string {
         });
         
         console.log('[Auto-Continue] Observer setup complete');
+      }
+      
+      // Additional function to check for existing tool call limits on page load
+      function checkExistingToolCallLimits() {
+        // Check if a tool call limit message already exists
+        const toolCallMessages = [
+          'default stop the agent after',
+          'tool calls',
+          'resume the conversation'
+        ];
+        
+        // Check content in various containers
+        document.querySelectorAll('.markdown-section, .anysphere-markdown-container-root, section').forEach(el => {
+          const text = el.textContent || '';
+          if (toolCallMessages.some(msg => text.includes(msg))) {
+            console.log('[Auto-Continue] Found existing tool call limit message');
+            handleToolCallLimit();
+          }
+        });
+        
+        // Also check for resume links
+        document.querySelectorAll('.markdown-link, span.markdown-link').forEach(el => {
+          const text = el.textContent || '';
+          const dataLink = el.getAttribute('data-link') || '';
+          if (text.toLowerCase().includes('resume') || 
+              dataLink.includes('resumeCurrentChat') || 
+              dataLink.includes('composer.resumeCurrentChat')) {
+            console.log('[Auto-Continue] Found existing resume link');
+            handleToolCallLimit();
+          }
+        });
       }
       
       // Create indicator
@@ -589,7 +652,8 @@ function getAutoContScript(waitTimeMs: number): string {
         
         // Try to find the chat container and set up observer if it exists
         const chatContainer = document.querySelector('.chat-container') || 
-                             document.querySelector('[class*="chat"]');
+                             document.querySelector('[class*="chat"]') ||
+                             document.querySelector('.anysphere-markdown-container-root');
         
         if (chatContainer && !window.__AUTO_CONTINUE_OBSERVER) {
           setupObserver();
@@ -598,6 +662,9 @@ function getAutoContScript(waitTimeMs: number): string {
       
       // Initial setup
       setupObserver();
+      
+      // Check for existing tool call limits on load
+      setTimeout(checkExistingToolCallLimits, 1000);
       
       console.log('[Auto-Continue] Extension activated');
     })();
