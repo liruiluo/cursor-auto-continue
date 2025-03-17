@@ -2,7 +2,7 @@
   "name": "cursor-auto-continue",
   "displayName": "Cursor Auto Continue",
   "description": "Automatically responds with 'continue' when Claude hits the tool call limit in Cursor",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "risalabs",
   "icon": "icon.png",
   "repository": {
