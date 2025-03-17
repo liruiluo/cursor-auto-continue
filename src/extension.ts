@@ -566,47 +566,120 @@ function getAutoContScript(waitTimeMs: number): string {
           }
         }
         
-        // Fallback method: find all elements with "resume" text
+        // Try the cursor-specific UI shown in the user's HTML
         if (!clicked) {
-          debugLog('Fallback: searching for elements with resume text');
-          document.querySelectorAll('*').forEach(el => {
-            if (clicked) return;
+          debugLog('Targeting Cursor-specific input box and send button');
+          try {
+            // Target elements from the provided HTML structure
+            const editor = document.querySelector('.aislash-editor-input[contenteditable="true"]');
+            const sendButton = document.querySelector('.composer-button-area .anysphere-button');
             
-            try {
-              if (el.textContent && 
-                  el.textContent.toLowerCase().includes('resume') && 
-                  el.offsetWidth > 0 && 
-                  el.offsetHeight > 0) {
-                debugLog('Found element with resume text:', el);
-                try { el.click(); } catch (e) { debugLog('Native click failed:', e); }
-                try { el.dispatchEvent(clickEvent); } catch (e) { debugLog('Event dispatch failed:', e); }
-                clicked = true;
+            if (editor && sendButton) {
+              debugLog('Found editor and send button in new UI format');
+              
+              // Insert "continue" text into editor
+              try {
+                // First try setting innerHTML
+                editor.innerHTML = '<p>continue</p>';
+                
+                // Then try different methods to ensure it takes effect
+                editor.textContent = 'continue';
+                
+                // Create and dispatch multiple event types for reliability
+                ['input', 'change', 'keydown', 'keyup'].forEach(eventType => {
+                  const event = new Event(eventType, { bubbles: true });
+                  editor.dispatchEvent(event);
+                });
+                
+                // Wait briefly then click send
+                setTimeout(() => {
+                  sendButton.click();
+                  debugLog('Clicked send button in new UI');
+                  clicked = true;
+                }, 100);
+              } catch (e) {
+                debugLog('Error interacting with editor:', e);
               }
-            } catch (e) {
-              // Ignore errors for this broad search
             }
-          });
+          } catch (e) {
+            debugLog('Error targeting new UI:', e);
+          }
         }
         
-        // Fallback method: input field
+        // Fallback method: find all editable areas and buttons
         if (!clicked) {
-          debugLog('Fallback: trying input field method');
-          const inputField = document.querySelector('textarea') || document.querySelector('[role="textbox"]');
-          const submitButton = document.querySelector('button[type="submit"]') || 
-                             document.querySelector('button:not([disabled])');
-          
-          if (inputField && submitButton) {
-            try {
-              inputField.value = "continue";
-              inputField.dispatchEvent(new Event('input', {bubbles: true}));
-              setTimeout(() => {
-                submitButton.click();
-                clicked = true;
-                debugLog('Used input field method');
-              }, 200);
-            } catch (e) {
-              debugLog('Input method failed:', e);
+          debugLog('Fallback: searching for any editable area + button');
+          try {
+            const editableElements = [
+              ...document.querySelectorAll('[contenteditable="true"]'),
+              ...document.querySelectorAll('textarea'),
+              ...document.querySelectorAll('[role="textbox"]')
+            ];
+            
+            const buttons = [
+              ...document.querySelectorAll('button'),
+              ...document.querySelectorAll('.anysphere-button'),
+              ...document.querySelectorAll('[role="button"]'),
+              ...document.querySelectorAll('.button-container')
+            ];
+            
+            // Find the visible editable element
+            for (const editable of editableElements) {
+              if (clicked) break;
+              
+              if (isElementVisible(editable)) {
+                debugLog('Found visible editable element:', editable);
+                
+                // Try setting content
+                try {
+                  if (editable.getAttribute('contenteditable') === 'true') {
+                    editable.innerHTML = '<p>continue</p>';
+                    editable.textContent = 'continue';
+                  } else {
+                    editable.value = 'continue';
+                  }
+                  
+                  // Dispatch events
+                  ['input', 'change', 'keydown', 'keyup'].forEach(eventType => {
+                    const event = new Event(eventType, { bubbles: true });
+                    editable.dispatchEvent(event);
+                  });
+                  
+                  // Find a nearby button to click
+                  for (const button of buttons) {
+                    if (isElementVisible(button)) {
+                      debugLog('Found visible button:', button);
+                      setTimeout(() => {
+                        button.click();
+                        clicked = true;
+                        debugLog('Clicked button');
+                      }, 100);
+                      break;
+                    }
+                  }
+                } catch (e) {
+                  debugLog('Error with editable element:', e);
+                }
+              }
             }
+          } catch (e) {
+            debugLog('Error in editable search:', e);
+          }
+        }
+        
+        // Helper function to check if element is visible
+        function isElementVisible(el) {
+          if (!el) return false;
+          
+          try {
+            const style = window.getComputedStyle(el);
+            return style.display !== 'none' && 
+                   style.visibility !== 'hidden' && 
+                   style.opacity !== '0' &&
+                   el.offsetWidth > 0 && 
+                   el.offsetHeight > 0;
+          } catch (e) {
+            return false;
           }
         }
         
@@ -741,7 +814,9 @@ function getAutoContScript(waitTimeMs: number): string {
           'stop the agent after',
           'after 25 tool calls',
           'tool calls',
-          'resume the conversation'
+          'resume the conversation',
+          'can resume the conversation',
+          'default stop'
         ];
         
         // Scan entire document for these phrases
@@ -794,6 +869,34 @@ function getAutoContScript(waitTimeMs: number): string {
             }
           }
         }
+        
+        // Additional check for any "resume" text in visible elements
+        document.querySelectorAll('span, a, div, p').forEach(el => {
+          if (el.textContent && 
+              (el.textContent.toLowerCase().includes('resume') || 
+               el.textContent.toLowerCase().includes('continue')) && 
+              isElementVisible(el)) {
+            debugLog('Found element with resume/continue text:', el);
+            handleToolCallLimit();
+            return;
+          }
+        });
+      }
+      
+      // Helper function to check if element is visible
+      function isElementVisible(el) {
+        if (!el) return false;
+        
+        try {
+          const style = window.getComputedStyle(el);
+          return style.display !== 'none' && 
+                 style.visibility !== 'hidden' && 
+                 style.opacity !== '0' &&
+                 el.offsetWidth > 0 && 
+                 el.offsetHeight > 0;
+        } catch (e) {
+          return false;
+        }
       }
       
       // Run on interval to catch any issues with initial detection
@@ -838,6 +941,15 @@ function getAutoContScript(waitTimeMs: number): string {
       // Also run a check if user interacts with the page
       document.addEventListener('click', () => {
         setTimeout(checkForToolCallLimit, 500);
+      });
+      
+      // Setup a special keyboard shortcut to force resume (for debugging)
+      document.addEventListener('keydown', function(e) {
+        // Ctrl+Alt+R to force resume
+        if (e.ctrlKey && e.altKey && e.key === 'r') {
+          debugLog('Manual resume triggered via keyboard shortcut');
+          forceResume();
+        }
       });
       
       console.log('[Auto-Continue] Extension activated with enhanced detection');
