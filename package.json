@@ -3,7 +3,7 @@
   "displayName": "Auto Continue",
   "description": "Automatically responds with 'continue' when Claude hits the tool call limit",
   "version": "0.1.0",
-  "publisher": "risa-labs",
+  "publisher": "risalabs",
   "icon": "icon.png",
   "repository": {
     "type": "git",

@@ -12,7 +12,7 @@ The repository has been set up, but we need to complete the VS Code Marketplace 
 2. Sign in with a Microsoft Account
 3. If you don't already have a publisher, choose "Create Publisher"
 4. Fill in the details:
-   - Publisher ID: `risa-labs` (this should match the "publisher" field in package.json)
+   - Publisher ID: `risalabs` (this should match the "publisher" field in package.json)
    - Display Name: `Risa Labs`
    - Detailed description about your organization
 5. Complete the registration process
@@ -41,7 +41,7 @@ vsce publish -p <your-access-token>
 Or store the token for future use:
 
 ```bash
-vsce login risa-labs
+vsce login risalabs
 # Enter your token when prompted
 vsce publish
 ```

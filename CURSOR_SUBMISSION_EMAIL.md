@@ -25,7 +25,7 @@ I'm excited to submit a new extension for the Cursor Marketplace called "Auto Co
 - **Modal Information**: Provides a clean modal interface when clicked for additional information
 
 ## Installation
-The VSIX package is attached to this email and is also available on our GitHub releases page. We've also published the extension to the VS Code Marketplace under the publisher "risa-labs".
+The VSIX package is attached to this email and is also available on our GitHub releases page. We've also published the extension to the VS Code Marketplace under the publisher "risalabs".
 
 ## Why Cursor Users Will Find This Valuable
 Cursor users frequently work with Claude AI for extended sessions, and the tool call limit can interrupt their workflow. This extension eliminates that interruption, providing a smoother, more productive experience. Based on user feedback, this is one of the most commonly requested features.
