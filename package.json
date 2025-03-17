@@ -1,7 +1,7 @@
 {
   "name": "cursor-auto-continue",
-  "displayName": "Auto Continue",
-  "description": "Automatically responds with 'continue' when Claude hits the tool call limit",
+  "displayName": "Cursor Auto Continue",
+  "description": "Automatically responds with 'continue' when Claude hits the tool call limit in Cursor",
   "version": "0.1.0",
   "publisher": "risalabs",
   "icon": "icon.png",
@@ -16,11 +16,12 @@
     "Other"
   ],
   "keywords": [
+    "cursor",
     "claude",
     "ai",
     "auto continue",
     "tool call",
-    "cursor"
+    "claude ai"
   ],
   "galleryBanner": {
     "color": "#2b78d4",
@@ -34,11 +35,11 @@
     "commands": [
       {
         "command": "cursor-auto-continue.enable",
-        "title": "Enable Auto Continue"
+        "title": "Enable Cursor Auto Continue"
       },
       {
         "command": "cursor-auto-continue.disable",
-        "title": "Disable Auto Continue"
+        "title": "Disable Cursor Auto Continue"
       }
     ],
     "configuration": {
