@@ -1,4 +1,4 @@
-# VS Code Auto Continue Extension
+# Cursor Auto Continue Extension
 
 An extension that automatically continues conversations when Claude's AI hits the tool call limit.
 
@@ -13,14 +13,14 @@ An extension that automatically continues conversations when Claude's AI hits th
 
 ### From VS Code Marketplace
 
-1. Open VS Code
+1. Open VS Code or Cursor
 2. Go to Extensions (Ctrl+Shift+X / Cmd+Shift+X)
 3. Search for "Auto Continue"
 4. Click Install
 
 ### From VSIX File
 
-1. Download the .vsix file from the [releases page](https://github.com/risa-labs-inc/vscode-auto-continue/releases)
+1. Download the .vsix file from the [releases page](https://github.com/risa-labs-inc/cursor-auto-continue/releases)
 2. In VS Code/Cursor, select "Extensions" from the sidebar
 3. Click "..." at the top of the Extensions panel
 4. Select "Install from VSIX..."
@@ -57,8 +57,8 @@ To adjust settings:
 ### Building from source
 
 ```bash
-git clone https://github.com/risa-labs-inc/vscode-auto-continue.git
-cd vscode-auto-continue
+git clone https://github.com/risa-labs-inc/cursor-auto-continue.git
+cd cursor-auto-continue
 npm install
 npm run compile
 npm run package

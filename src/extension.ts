@@ -16,17 +16,17 @@ export function activate(context: vscode.ExtensionContext) {
   ui.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1);
   ui.statusBarItem.text = isEnabled ? '$(play-circle) AUTO' : '$(stop-circle) AUTO';
   ui.statusBarItem.tooltip = 'Auto Continue ' + (isEnabled ? 'Enabled' : 'Disabled');
-  ui.statusBarItem.command = isEnabled ? 'vscode-auto-continue.disable' : 'vscode-auto-continue.enable';
+  ui.statusBarItem.command = isEnabled ? 'cursor-auto-continue.disable' : 'cursor-auto-continue.enable';
   ui.statusBarItem.backgroundColor = new vscode.ThemeColor(isEnabled ? 'statusBarItem.warningBackground' : 'statusBarItem.errorBackground');
   ui.statusBarItem.show();
   
   // Register commands
-  const enableCommand = vscode.commands.registerCommand('vscode-auto-continue.enable', () => {
+  const enableCommand = vscode.commands.registerCommand('cursor-auto-continue.enable', () => {
     isEnabled = true;
     vscode.workspace.getConfiguration('autoContinue').update('enabled', true, true);
     ui.statusBarItem!.text = '$(play-circle) AUTO';
     ui.statusBarItem!.tooltip = 'Auto Continue Enabled';
-    ui.statusBarItem!.command = 'vscode-auto-continue.disable';
+    ui.statusBarItem!.command = 'cursor-auto-continue.disable';
     ui.statusBarItem!.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
     vscode.window.showInformationMessage('Auto Continue enabled', 'Settings').then(selection => {
       if (selection === 'Settings') {
@@ -36,19 +36,19 @@ export function activate(context: vscode.ExtensionContext) {
     injectScript(context, true);
   });
   
-  const disableCommand = vscode.commands.registerCommand('vscode-auto-continue.disable', () => {
+  const disableCommand = vscode.commands.registerCommand('cursor-auto-continue.disable', () => {
     isEnabled = false;
     vscode.workspace.getConfiguration('autoContinue').update('enabled', false, true);
     ui.statusBarItem!.text = '$(stop-circle) AUTO';
     ui.statusBarItem!.tooltip = 'Auto Continue Disabled';
-    ui.statusBarItem!.command = 'vscode-auto-continue.enable';
+    ui.statusBarItem!.command = 'cursor-auto-continue.enable';
     ui.statusBarItem!.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
     vscode.window.showInformationMessage('Auto Continue disabled');
     injectScript(context, false);
   });
   
   // Add config command to open settings
-  const configCommand = vscode.commands.registerCommand('vscode-auto-continue.configure', () => {
+  const configCommand = vscode.commands.registerCommand('cursor-auto-continue.configure', () => {
     vscode.commands.executeCommand('workbench.action.openSettings', 'autoContinue');
   });
   

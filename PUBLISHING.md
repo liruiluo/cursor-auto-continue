@@ -15,13 +15,13 @@ This document provides step-by-step instructions for publishing the Auto Continu
 1. Go to [GitHub](https://github.com) and sign in
 2. Click on the "+" icon in the top-right corner and select "New repository"
 3. Choose the risa-labs-inc organization
-4. Name it "vscode-auto-continue"
+4. Name it "cursor-auto-continue"
 5. Choose public visibility
 6. Click "Create repository"
 7. Follow the instructions to push your existing repository:
 
 ```bash
-git remote add origin https://github.com/risa-labs-inc/vscode-auto-continue.git
+git remote add origin https://github.com/risa-labs-inc/cursor-auto-continue.git
 git branch -M main
 git push -u origin main
 ```
@@ -29,7 +29,7 @@ git push -u origin main
 Alternatively, use the GitHub CLI:
 
 ```bash
-gh repo create risa-labs-inc/vscode-auto-continue --public --source=. --push
+gh repo create risa-labs-inc/cursor-auto-continue --public --source=. --push
 ```
 
 ## Publish to VS Code Marketplace

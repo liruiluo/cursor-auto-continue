@@ -13,7 +13,7 @@ I'm excited to submit a new extension for the Cursor Marketplace called "Auto Co
 ## Extension Details
 - **Name**: Auto Continue
 - **Description**: Automatically responds with 'continue' when Claude hits the tool call limit
-- **GitHub Repository**: https://github.com/risa-labs-inc/vscode-auto-continue
+- **GitHub Repository**: https://github.com/risa-labs-inc/cursor-auto-continue
 - **Version**: 0.1.0
 - **Publisher**: Risa Labs
 
@@ -43,4 +43,4 @@ Risa Labs
 
 ---
 
-Note: Remember to attach the .vsix file (located at `vscode-auto-continue-0.1.0.vsix`) when sending this email. 
+Note: Remember to attach the .vsix file (located at `cursor-auto-continue-0.1.0.vsix`) when sending this email. 

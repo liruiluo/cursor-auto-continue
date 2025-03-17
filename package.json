@@ -1,5 +1,5 @@
 {
-  "name": "vscode-auto-continue",
+  "name": "cursor-auto-continue",
   "displayName": "Auto Continue",
   "description": "Automatically responds with 'continue' when Claude hits the tool call limit",
   "version": "0.1.0",
@@ -7,7 +7,7 @@
   "icon": "icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/risa-labs-inc/vscode-auto-continue"
+    "url": "https://github.com/risa-labs-inc/cursor-auto-continue"
   },
   "engines": {
     "vscode": "^1.60.0"
@@ -33,11 +33,11 @@
   "contributes": {
     "commands": [
       {
-        "command": "vscode-auto-continue.enable",
+        "command": "cursor-auto-continue.enable",
         "title": "Enable Auto Continue"
       },
       {
-        "command": "vscode-auto-continue.disable",
+        "command": "cursor-auto-continue.disable",
         "title": "Disable Auto Continue"
       }
     ],
