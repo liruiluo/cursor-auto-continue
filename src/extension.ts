@@ -194,6 +194,57 @@ function getAutoContScript(waitTimeMs: number): string {
       // Configuration
       const WAIT_TIME_MS = ${waitTimeMs};
       let isWaiting = false;
+      const DEBUG = true; // Enable for more detailed logs and direct inspection
+
+      // Debug logger
+      function debugLog(...args) {
+        if (DEBUG) {
+          console.log('[Auto-Continue Debug]', ...args);
+        }
+      }
+
+      // Direct DOM inspection function (more aggressive for debugging)
+      function inspectDOM() {
+        if (!DEBUG) return;
+        
+        // Log all potentially relevant elements for debugging
+        debugLog('==== DOM INSPECTION ====');
+        
+        // Log all markdown sections
+        const sections = document.querySelectorAll('.markdown-section, section');
+        debugLog('Found', sections.length, 'sections');
+        sections.forEach((s, i) => {
+          debugLog(\`Section \${i}:\`, {
+            text: s.textContent,
+            html: s.innerHTML.substring(0, 100) + '...',
+            attrs: {
+              'data-markdown-raw': s.getAttribute('data-markdown-raw'),
+              'data-section-index': s.getAttribute('data-section-index')
+            }
+          });
+        });
+        
+        // Log resume links
+        const links = document.querySelectorAll('.markdown-link, [data-link], span.markdown-link');
+        debugLog('Found', links.length, 'potential links');
+        links.forEach((l, i) => {
+          debugLog(\`Link \${i}:\`, {
+            text: l.textContent,
+            dataLink: l.getAttribute('data-link'),
+            class: l.className
+          });
+        });
+        
+        // Log anysphere containers
+        const containers = document.querySelectorAll('.anysphere-markdown-container-root');
+        debugLog('Found', containers.length, 'anysphere containers');
+        containers.forEach((c, i) => {
+          debugLog(\`Container \${i}:\`, {
+            text: c.textContent.substring(0, 100) + '...',
+            html: c.innerHTML.substring(0, 100) + '...'
+          });
+        });
+      }
       
       // Get VS Code theme colors
       function getVSCodeColors() {
@@ -440,11 +491,158 @@ function getAutoContScript(waitTimeMs: number): string {
         }, 5000);
       }
       
+      // DIRECT RESUME FUNCTION - Force resume by directly accessing elements
+      function forceResume() {
+        debugLog('Attempting force resume...');
+        let clicked = false;
+        
+        // Most aggressive method - try all possible resume link selectors
+        const allSelectors = [
+          '.markdown-link[data-link*="resumeCurrentChat"]',
+          '.markdown-link[data-link*="composer.resumeCurrentChat"]',
+          '[data-link*="resumeCurrentChat"]',
+          '[data-link*="composer.resumeCurrentChat"]',
+          'a[href*="resumeCurrentChat"]',
+          'span.markdown-link',
+          'span[data-link*="resumeCurrentChat"]',
+          'span[data-link*="composer.resumeCurrentChat"]'
+        ];
+        
+        // Create a custom event for more reliable clicks
+        const clickEvent = new MouseEvent('click', {
+          view: window,
+          bubbles: true,
+          cancelable: true
+        });
+        
+        // Try all selectors
+        for (const selector of allSelectors) {
+          if (clicked) break;
+          
+          try {
+            const elements = document.querySelectorAll(selector);
+            debugLog(\`Found \${elements.length} elements matching \${selector}\`);
+            
+            for (const el of elements) {
+              if (clicked) break;
+              
+              try {
+                debugLog('Attempting to click:', el);
+                
+                // Try multiple click methods
+                try { el.click(); } catch (e) { debugLog('Native click failed:', e); }
+                try { el.dispatchEvent(clickEvent); } catch (e) { debugLog('Event dispatch failed:', e); }
+                
+                // Try to trigger resume via data attributes if present
+                if (el.hasAttribute('data-link')) {
+                  const dataLink = el.getAttribute('data-link');
+                  if (dataLink && dataLink.includes('resumeCurrentChat')) {
+                    try {
+                      // Create and dispatch a custom event to trigger the resume command
+                      const customEvent = new CustomEvent('cursorCommand', {
+                        detail: { command: 'composer.resumeCurrentChat' },
+                        bubbles: true
+                      });
+                      el.dispatchEvent(customEvent);
+                      debugLog('Dispatched custom resume event');
+                    } catch (e) {
+                      debugLog('Custom event failed:', e);
+                    }
+                  }
+                }
+                
+                // Check if text content contains 'resume'
+                if (el.textContent.toLowerCase().includes('resume')) {
+                  clicked = true;
+                  debugLog('Successfully clicked resume element');
+                  break;
+                }
+              } catch (e) {
+                debugLog('Click attempt failed for element:', e);
+              }
+            }
+          } catch (e) {
+            debugLog('Selector error:', e);
+          }
+        }
+        
+        // Fallback method: find all elements with "resume" text
+        if (!clicked) {
+          debugLog('Fallback: searching for elements with resume text');
+          document.querySelectorAll('*').forEach(el => {
+            if (clicked) return;
+            
+            try {
+              if (el.textContent && 
+                  el.textContent.toLowerCase().includes('resume') && 
+                  el.offsetWidth > 0 && 
+                  el.offsetHeight > 0) {
+                debugLog('Found element with resume text:', el);
+                try { el.click(); } catch (e) { debugLog('Native click failed:', e); }
+                try { el.dispatchEvent(clickEvent); } catch (e) { debugLog('Event dispatch failed:', e); }
+                clicked = true;
+              }
+            } catch (e) {
+              // Ignore errors for this broad search
+            }
+          });
+        }
+        
+        // Fallback method: input field
+        if (!clicked) {
+          debugLog('Fallback: trying input field method');
+          const inputField = document.querySelector('textarea') || document.querySelector('[role="textbox"]');
+          const submitButton = document.querySelector('button[type="submit"]') || 
+                             document.querySelector('button:not([disabled])');
+          
+          if (inputField && submitButton) {
+            try {
+              inputField.value = "continue";
+              inputField.dispatchEvent(new Event('input', {bubbles: true}));
+              setTimeout(() => {
+                submitButton.click();
+                clicked = true;
+                debugLog('Used input field method');
+              }, 200);
+            } catch (e) {
+              debugLog('Input method failed:', e);
+            }
+          }
+        }
+        
+        // Final fallback: try to trigger command directly
+        if (!clicked) {
+          debugLog('Final fallback: trying to trigger command directly');
+          try {
+            // Create a custom event on document to try triggering the resume command
+            const commandEvent = new CustomEvent('vscode.command', {
+              detail: { command: 'composer.resumeCurrentChat' },
+              bubbles: true
+            });
+            document.dispatchEvent(commandEvent);
+            
+            // Try additional command patterns
+            ['resumeCurrentChat', 'composer.resumeCurrentChat', 'cursor.resumeChat'].forEach(cmd => {
+              const cmdEvent = new CustomEvent('vscode.command', {
+                detail: { command: cmd },
+                bubbles: true
+              });
+              document.dispatchEvent(cmdEvent);
+            });
+          } catch (e) {
+            debugLog('Command event failed:', e);
+          }
+        }
+        
+        return clicked;
+      }
+      
       // Handle tool call limit
       function handleToolCallLimit() {
         if (isWaiting) return;
         
         console.log('[Auto-Continue] Tool call limit detected');
+        debugLog('Tool call limit detected');
         isWaiting = true;
         
         // Update indicator
@@ -456,66 +654,13 @@ function getAutoContScript(waitTimeMs: number): string {
         
         showNotification('Tool call limit detected. Auto-continuing in ' + (WAIT_TIME_MS/1000) + ' seconds...');
         
+        // Run DOM inspection in debug mode
+        if (DEBUG) {
+          inspectDOM();
+        }
+        
         setTimeout(() => {
-          let clicked = false;
-          
-          // Try multiple methods to continue
-          
-          // Method 1: Resume links with specific classes and data attributes
-          try {
-            const resumeLinks = [
-              ...document.querySelectorAll('.markdown-link[data-link*="resumeCurrentChat"]'),
-              ...document.querySelectorAll('.markdown-link[data-link*="composer.resumeCurrentChat"]'),
-              ...document.querySelectorAll('[data-link*="resumeCurrentChat"]'),
-              ...document.querySelectorAll('[data-link*="composer.resumeCurrentChat"]'),
-              ...document.querySelectorAll('a[href*="resumeCurrentChat"]'),
-              ...document.querySelectorAll('span.markdown-link')
-            ];
-            
-            for (const link of resumeLinks) {
-              if (!clicked) {
-                link.click();
-                clicked = true;
-                console.log('[Auto-Continue] Clicked resume link:', link);
-                break;
-              }
-            }
-          } catch (e) {
-            console.error('[Auto-Continue] Error clicking specific link:', e);
-          }
-          
-          // Method 2: Elements with resume text
-          if (!clicked) {
-            document.querySelectorAll('span, a, [role="link"]').forEach(el => {
-              if (!clicked && el.textContent.toLowerCase().includes('resume')) {
-                try {
-                  el.click();
-                  clicked = true;
-                  console.log('[Auto-Continue] Clicked text resume link');
-                } catch (e) {
-                  console.error('[Auto-Continue] Error clicking text link:', e);
-                }
-              }
-            });
-          }
-          
-          // Method 3: Input field + submit
-          if (!clicked) {
-            const inputField = document.querySelector('textarea') || document.querySelector('[role="textbox"]');
-            const submitButton = document.querySelector('button[type="submit"]') || document.querySelector('button:not([disabled])');
-            
-            if (inputField && submitButton) {
-              try {
-                inputField.value = "continue";
-                inputField.dispatchEvent(new Event('input', {bubbles: true}));
-                submitButton.click();
-                clicked = true;
-                console.log('[Auto-Continue] Used input field method');
-              } catch (e) {
-                console.error('[Auto-Continue] Error using input method:', e);
-              }
-            }
-          }
+          const clicked = forceResume();
           
           // Reset indicator
           const indicator = document.querySelector('#auto-continue-indicator div');
@@ -550,53 +695,29 @@ function getAutoContScript(waitTimeMs: number): string {
         window.__AUTO_CONTINUE_OBSERVER = new MutationObserver(mutations => {
           if (isWaiting) return;
           
+          // Check if there are any significant changes that might indicate a tool call limit
+          let shouldCheck = false;
+          
           for (const mutation of mutations) {
+            // If nodes were added, it might be our message
             if (mutation.addedNodes && mutation.addedNodes.length > 0) {
-              // Check for the tool call limit message in various ways
-              // 1. Check for the specific text pattern
-              const sections = document.querySelectorAll('.markdown-section, section');
-              for (const section of sections) {
-                const text = section.textContent || '';
-                const rawAttr = section.getAttribute('data-markdown-raw') || '';
-                
-                if (text.includes('default stop the agent after') || 
-                    text.includes('tool calls') ||
-                    rawAttr.includes('default stop the agent after') || 
-                    rawAttr.includes('tool calls')) {
-                  console.log('[Auto-Continue] Found tool call limit message:', text);
-                  handleToolCallLimit();
-                  return;
-                }
-              }
-              
-              // 2. Check for resume links
-              const resumeLinks = document.querySelectorAll('.markdown-link[data-link*="resumeCurrentChat"], .markdown-link[data-link*="composer.resumeCurrentChat"], span.markdown-link');
-              for (const link of resumeLinks) {
-                const text = link.textContent || '';
-                const dataLink = link.getAttribute('data-link') || '';
-                
-                if (text.toLowerCase().includes('resume') || 
-                    dataLink.includes('resumeCurrentChat') || 
-                    dataLink.includes('composer.resumeCurrentChat')) {
-                  console.log('[Auto-Continue] Found resume link:', text, dataLink);
-                  handleToolCallLimit();
-                  return;
-                }
-              }
-              
-              // 3. Check for the "anysphere-markdown-container-root" which contains the message
-              const containers = document.querySelectorAll('.anysphere-markdown-container-root');
-              for (const container of containers) {
-                const text = container.textContent || '';
-                if (text.includes('default stop the agent after') || 
-                    text.includes('tool calls') || 
-                    text.includes('resume the conversation')) {
-                  console.log('[Auto-Continue] Found tool call container:', text);
-                  handleToolCallLimit();
-                  return;
-                }
-              }
+              shouldCheck = true;
+              break;
             }
+            
+            // If attributes changed on relevant elements, check
+            if (mutation.type === 'attributes' && 
+                (mutation.target.classList.contains('markdown-section') || 
+                 mutation.target.classList.contains('markdown-link') ||
+                 mutation.target.classList.contains('anysphere-markdown-container-root'))) {
+              shouldCheck = true;
+              break;
+            }
+          }
+          
+          if (shouldCheck) {
+            // Check all the various patterns that might indicate a tool call limit
+            checkForToolCallLimit();
           }
         });
         
@@ -610,35 +731,76 @@ function getAutoContScript(waitTimeMs: number): string {
         console.log('[Auto-Continue] Observer setup complete');
       }
       
-      // Additional function to check for existing tool call limits on page load
-      function checkExistingToolCallLimits() {
-        // Check if a tool call limit message already exists
-        const toolCallMessages = [
-          'default stop the agent after',
+      // Comprehensive check for tool call limit
+      function checkForToolCallLimit() {
+        debugLog('Checking for tool call limit indicators');
+        
+        // 1. Check for specific text patterns anywhere in the document
+        const toolCallIndicators = [
+          'default stop the agent',
+          'stop the agent after',
+          'after 25 tool calls',
           'tool calls',
           'resume the conversation'
         ];
         
-        // Check content in various containers
-        document.querySelectorAll('.markdown-section, .anysphere-markdown-container-root, section').forEach(el => {
-          const text = el.textContent || '';
-          if (toolCallMessages.some(msg => text.includes(msg))) {
-            console.log('[Auto-Continue] Found existing tool call limit message');
-            handleToolCallLimit();
+        // Scan entire document for these phrases
+        const documentText = document.body.textContent;
+        if (documentText) {
+          for (const indicator of toolCallIndicators) {
+            if (documentText.includes(indicator)) {
+              debugLog(\`Found tool call indicator text: \${indicator}\`);
+              handleToolCallLimit();
+              return;
+            }
           }
-        });
+        }
         
-        // Also check for resume links
-        document.querySelectorAll('.markdown-link, span.markdown-link').forEach(el => {
-          const text = el.textContent || '';
-          const dataLink = el.getAttribute('data-link') || '';
-          if (text.toLowerCase().includes('resume') || 
-              dataLink.includes('resumeCurrentChat') || 
-              dataLink.includes('composer.resumeCurrentChat')) {
-            console.log('[Auto-Continue] Found existing resume link');
-            handleToolCallLimit();
+        // 2. Look for specific elements with resume functionality
+        const resumeElement = document.querySelector('.markdown-link[data-link*="resumeCurrentChat"], span.markdown-link');
+        if (resumeElement) {
+          debugLog('Found resume element:', resumeElement);
+          handleToolCallLimit();
+          return;
+        }
+        
+        // 3. Check for any elements with resumeCurrentChat in data-link
+        const resumeLinks = document.querySelectorAll('[data-link*="resumeCurrentChat"], [data-link*="composer.resumeCurrentChat"]');
+        if (resumeLinks.length > 0) {
+          debugLog('Found resume links:', resumeLinks.length);
+          handleToolCallLimit();
+          return;
+        }
+        
+        // 4. Look for specific HTML structure shown in user's example
+        const anysphere = document.querySelector('.anysphere-markdown-container-root');
+        if (anysphere && anysphere.textContent.includes('tool calls')) {
+          debugLog('Found anysphere container with tool calls text');
+          handleToolCallLimit();
+          return;
+        }
+        
+        // 5. Check for content in markdown sections
+        const sections = document.querySelectorAll('.markdown-section, section');
+        for (const section of sections) {
+          const text = section.textContent || '';
+          const rawAttr = section.getAttribute('data-markdown-raw') || '';
+          
+          for (const indicator of toolCallIndicators) {
+            if (text.includes(indicator) || rawAttr.includes(indicator)) {
+              debugLog(\`Found tool call indicator in section: \${indicator}\`);
+              handleToolCallLimit();
+              return;
+            }
           }
-        });
+        }
+      }
+      
+      // Run on interval to catch any issues with initial detection
+      function runPeriodicChecks() {
+        if (!isWaiting) {
+          checkForToolCallLimit();
+        }
       }
       
       // Create indicator
@@ -653,20 +815,32 @@ function getAutoContScript(waitTimeMs: number): string {
         // Try to find the chat container and set up observer if it exists
         const chatContainer = document.querySelector('.chat-container') || 
                              document.querySelector('[class*="chat"]') ||
-                             document.querySelector('.anysphere-markdown-container-root');
+                             document.querySelector('.anysphere-markdown-container-root') ||
+                             document.querySelector('main');
         
         if (chatContainer && !window.__AUTO_CONTINUE_OBSERVER) {
           setupObserver();
         }
-      }, 3000);
+        
+        // Run periodic checks for tool call limits
+        runPeriodicChecks();
+      }, 2000);
       
       // Initial setup
       setupObserver();
       
-      // Check for existing tool call limits on load
-      setTimeout(checkExistingToolCallLimits, 1000);
+      // Check for existing tool call limits immediately
+      setTimeout(checkForToolCallLimit, 500);
       
-      console.log('[Auto-Continue] Extension activated');
+      // Run another check after a short delay to catch any missed elements
+      setTimeout(checkForToolCallLimit, 1500);
+      
+      // Also run a check if user interacts with the page
+      document.addEventListener('click', () => {
+        setTimeout(checkForToolCallLimit, 500);
+      });
+      
+      console.log('[Auto-Continue] Extension activated with enhanced detection');
     })();
   `;
 }
