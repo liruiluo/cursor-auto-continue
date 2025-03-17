@@ -7,7 +7,7 @@
   "icon": "icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/YOUR_USERNAME/vscode-auto-continue"
+    "url": "https://github.com/risa-labs-inc/vscode-auto-continue"
   },
   "engines": {
     "vscode": "^1.60.0"

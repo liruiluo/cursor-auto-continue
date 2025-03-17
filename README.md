@@ -20,7 +20,7 @@ An extension that automatically continues conversations when Claude's AI hits th
 
 ### From VSIX File
 
-1. Download the .vsix file from the [releases page](https://github.com/YOUR_USERNAME/vscode-auto-continue/releases)
+1. Download the .vsix file from the [releases page](https://github.com/risa-labs-inc/vscode-auto-continue/releases)
 2. In VS Code/Cursor, select "Extensions" from the sidebar
 3. Click "..." at the top of the Extensions panel
 4. Select "Install from VSIX..."
@@ -57,7 +57,7 @@ To adjust settings:
 ### Building from source
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/vscode-auto-continue.git
+git clone https://github.com/risa-labs-inc/vscode-auto-continue.git
 cd vscode-auto-continue
 npm install
 npm run compile
