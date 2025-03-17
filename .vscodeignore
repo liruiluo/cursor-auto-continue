@@ -1,0 +1,15 @@
+.vscode/**
+.vscode-test/**
+src/**
+.gitignore
+.yarnrc
+**/tsconfig.json
+**/.eslintrc.json
+**/*.map
+**/*.ts
+*.vsix
+PUBLISHING.md
+create-icon.js
+manual-icon.js
+icon-no-text.svg
+node_modules 
