@@ -1,0 +1,79 @@
+{
+  "name": "vscode-auto-continue",
+  "displayName": "Auto Continue",
+  "description": "Automatically responds with 'continue' when Claude hits the tool call limit",
+  "version": "0.1.0",
+  "publisher": "cursor-extensions",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USERNAME/vscode-auto-continue"
+  },
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "claude",
+    "ai",
+    "auto continue",
+    "tool call",
+    "cursor"
+  ],
+  "galleryBanner": {
+    "color": "#2b78d4",
+    "theme": "dark"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "vscode-auto-continue.enable",
+        "title": "Enable Auto Continue"
+      },
+      {
+        "command": "vscode-auto-continue.disable",
+        "title": "Disable Auto Continue"
+      }
+    ],
+    "configuration": {
+      "title": "Auto Continue",
+      "properties": {
+        "autoContinue.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable auto continue functionality"
+        },
+        "autoContinue.waitTimeMs": {
+          "type": "number",
+          "default": 2000,
+          "description": "Wait time in milliseconds before auto-continuing"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^16.11.7",
+    "@types/vscode": "^1.60.0",
+    "@typescript-eslint/eslint-plugin": "^5.42.0",
+    "@typescript-eslint/parser": "^5.42.0",
+    "canvas": "^3.1.0",
+    "eslint": "^8.26.0",
+    "typescript": "^4.8.4",
+    "vsce": "^2.15.0"
+  },
+  "author": "",
+  "license": "ISC"
+}

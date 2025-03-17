@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4286f4"/>
+      <stop offset="100%" stop-color="#373277"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="60" fill="url(#bg-gradient)" stroke="#ffffff" stroke-width="2"/>
+  
+  <!-- Auto-continue symbol (circular arrow with play triangle) -->
+  <g fill="#ffffff">
+    <!-- Circular arrow -->
+    <path d="M64,32 C81.673,32 96,46.327 96,64 C96,75.979 89.357,86.441 79.426,91.743 L86.851,99.168 C99.119,91.867 108,78.96 108,64 C108,39.699 88.301,20 64,20 C39.699,20 20,39.699 20,64 C20,78.96 28.881,91.867 41.149,99.168 L48.574,91.743 C38.643,86.441 32,75.979 32,64 C32,46.327 46.327,32 64,32 Z"/>
+    
+    <!-- Play triangle -->
+    <polygon points="52,50 76,64 52,78"/>
+    
+    <!-- Auto text -->
+    <text x="64" y="105" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle">AUTO</text>
+  </g>
+</svg> 
