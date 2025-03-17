@@ -52,8 +52,14 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.executeCommand('workbench.action.openSettings', 'autoContinue');
   });
   
+  // Add force resume command for manual intervention
+  const forceResumeCommand = vscode.commands.registerCommand('cursor-auto-continue.forceResume', () => {
+    injectForceResume(context);
+    vscode.window.showInformationMessage('Attempted to force resume conversation');
+  });
+  
   // Add commands to context
-  context.subscriptions.push(enableCommand, disableCommand, configCommand, ui.statusBarItem);
+  context.subscriptions.push(enableCommand, disableCommand, configCommand, forceResumeCommand, ui.statusBarItem);
   
   // Initial script injection
   if (isEnabled) {
@@ -170,7 +176,109 @@ function injectToWebview(webview: vscode.Webview, scriptContent: string, enable:
   }
 }
 
+function injectForceResume(context: vscode.ExtensionContext) {
+  try {
+    // Find all webview panels (for Cursor's chat interface)
+    const webviewPanels = (vscode.window as any).visibleWebviewPanels || [];
+    
+    if (webviewPanels.length > 0) {
+      for (const panel of webviewPanels) {
+        if (panel.webview && panel.title.includes('Chat')) {
+          panel.webview.html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="UTF-8">
+              <title>Force Resume</title>
+            </head>
+            <body>
+              <script>
+                (function() {
+                  console.log('[Auto-Continue] Force resume invoked');
+                  
+                  // Comprehensive approach to simulate clicking "continue"
+                  try {
+                    // 1. Try to find editor
+                    const allEditors = [
+                      ...document.querySelectorAll('[contenteditable="true"]'),
+                      ...document.querySelectorAll('textarea'),
+                      ...document.querySelectorAll('[role="textbox"]')
+                    ];
+                    
+                    // Find visible editors
+                    let editor = null;
+                    for (const e of allEditors) {
+                      if (e.offsetWidth > 0 && e.offsetHeight > 0) {
+                        editor = e;
+                        break;
+                      }
+                    }
+                    
+                    if (editor) {
+                      // Set content
+                      if (editor.getAttribute('contenteditable') === 'true') {
+                        editor.innerHTML = '<p>continue</p>';
+                        editor.textContent = 'continue';
+                      } else {
+                        editor.value = 'continue';
+                      }
+                      
+                      // Dispatch events
+                      ['input', 'change', 'keydown', 'keyup'].forEach(eventType => {
+                        editor.dispatchEvent(new Event(eventType, { bubbles: true }));
+                      });
+                      
+                      // Find and click closest button
+                      const allButtons = [
+                        ...document.querySelectorAll('button'),
+                        ...document.querySelectorAll('[role="button"]'),
+                        ...document.querySelectorAll('.anysphere-button')
+                      ];
+                      
+                      // Find visible buttons
+                      for (const button of allButtons) {
+                        if (button.offsetWidth > 0 && button.offsetHeight > 0) {
+                          setTimeout(() => button.click(), 100);
+                          break;
+                        }
+                      }
+                    }
+                  } catch (e) {
+                    console.error('[Auto-Continue] Force resume error:', e);
+                  }
+                })();
+              </script>
+            </body>
+            </html>
+          `;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to inject force resume script:', error);
+  }
+}
+
 function getAutoContScript(waitTimeMs: number): string {
+  // Get user-configurable selectors
+  const selectorConfig = vscode.workspace.getConfiguration('autoContinue').get('selectors', {}) as any;
+  const editorSelectors = JSON.stringify(selectorConfig.editorSelectors || [
+    '.aislash-editor-input[contenteditable="true"]',
+    '[role="textbox"]',
+    'textarea'
+  ]);
+  const buttonSelectors = JSON.stringify(selectorConfig.buttonSelectors || [
+    '.composer-button-area .anysphere-button',
+    'button[type="submit"]',
+    'button.send'
+  ]);
+  const limitIndicatorSelectors = JSON.stringify(selectorConfig.limitIndicatorSelectors || [
+    '.markdown-section',
+    '.anysphere-markdown-container-root',
+    'section',
+    '.markdown-link'
+  ]);
+  
   // This is a simplified version of our auto_continue.js script
   // adapted to work within the VS Code extension context
   return `
@@ -195,6 +303,31 @@ function getAutoContScript(waitTimeMs: number): string {
       const WAIT_TIME_MS = ${waitTimeMs};
       let isWaiting = false;
       const DEBUG = true; // Enable for more detailed logs and direct inspection
+      
+      // User-configurable selectors
+      const EDITOR_SELECTORS = ${editorSelectors};
+      const BUTTON_SELECTORS = ${buttonSelectors};
+      const LIMIT_INDICATOR_SELECTORS = ${limitIndicatorSelectors};
+      
+      // Tool call limit indicator text patterns
+      const TOOL_CALL_INDICATORS = [
+        'default stop the agent',
+        'stop the agent after',
+        'after 25 tool calls',
+        'tool calls',
+        'resume the conversation',
+        'can resume the conversation',
+        'default stop',
+        'we default stop',
+        'you can resume'
+      ];
+
+      // Record of UI state for future detection
+      let uiState = {
+        lastElementCount: 0,
+        resumeLinkDetected: false,
+        toolCallDetected: false
+      };
 
       // Debug logger
       function debugLog(...args) {
@@ -496,216 +629,120 @@ function getAutoContScript(waitTimeMs: number): string {
         debugLog('Attempting force resume...');
         let clicked = false;
         
-        // Most aggressive method - try all possible resume link selectors
-        const allSelectors = [
-          '.markdown-link[data-link*="resumeCurrentChat"]',
-          '.markdown-link[data-link*="composer.resumeCurrentChat"]',
-          '[data-link*="resumeCurrentChat"]',
-          '[data-link*="composer.resumeCurrentChat"]',
-          'a[href*="resumeCurrentChat"]',
-          'span.markdown-link',
-          'span[data-link*="resumeCurrentChat"]',
-          'span[data-link*="composer.resumeCurrentChat"]'
-        ];
+        // Log DOM state before attempting resume
+        debugLog('Current DOM state:');
+        debugLog('- Document body children:', document.body.children.length);
+        debugLog('- Total buttons:', document.querySelectorAll('button').length);
+        debugLog('- Total editable elements:', document.querySelectorAll('[contenteditable], textarea, [role="textbox"]').length);
         
-        // Create a custom event for more reliable clicks
-        const clickEvent = new MouseEvent('click', {
-          view: window,
-          bubbles: true,
-          cancelable: true
-        });
-        
-        // Try all selectors
-        for (const selector of allSelectors) {
-          if (clicked) break;
+        // Attempt with custom user-defined selectors first
+        EDITOR_SELECTORS.forEach(editorSelector => {
+          if (clicked) return;
           
           try {
-            const elements = document.querySelectorAll(selector);
-            debugLog(\`Found \${elements.length} elements matching \${selector}\`);
-            
-            for (const el of elements) {
-              if (clicked) break;
+            const editor = document.querySelector(editorSelector);
+            if (editor && isElementVisible(editor)) {
+              debugLog('Found editor with selector:', editorSelector);
               
-              try {
-                debugLog('Attempting to click:', el);
-                
-                // Try multiple click methods
-                try { el.click(); } catch (e) { debugLog('Native click failed:', e); }
-                try { el.dispatchEvent(clickEvent); } catch (e) { debugLog('Event dispatch failed:', e); }
-                
-                // Try to trigger resume via data attributes if present
-                if (el.hasAttribute('data-link')) {
-                  const dataLink = el.getAttribute('data-link');
-                  if (dataLink && dataLink.includes('resumeCurrentChat')) {
-                    try {
-                      // Create and dispatch a custom event to trigger the resume command
-                      const customEvent = new CustomEvent('cursorCommand', {
-                        detail: { command: 'composer.resumeCurrentChat' },
-                        bubbles: true
-                      });
-                      el.dispatchEvent(customEvent);
-                      debugLog('Dispatched custom resume event');
-                    } catch (e) {
-                      debugLog('Custom event failed:', e);
-                    }
-                  }
-                }
-                
-                // Check if text content contains 'resume'
-                if (el.textContent.toLowerCase().includes('resume')) {
-                  clicked = true;
-                  debugLog('Successfully clicked resume element');
-                  break;
-                }
-              } catch (e) {
-                debugLog('Click attempt failed for element:', e);
-              }
-            }
-          } catch (e) {
-            debugLog('Selector error:', e);
-          }
-        }
-        
-        // Try the cursor-specific UI shown in the user's HTML
-        if (!clicked) {
-          debugLog('Targeting Cursor-specific input box and send button');
-          try {
-            // Target elements from the provided HTML structure
-            const editor = document.querySelector('.aislash-editor-input[contenteditable="true"]');
-            const sendButton = document.querySelector('.composer-button-area .anysphere-button');
-            
-            if (editor && sendButton) {
-              debugLog('Found editor and send button in new UI format');
+              setEditorContent(editor, 'continue');
               
-              // Insert "continue" text into editor
-              try {
-                // First try setting innerHTML
-                editor.innerHTML = '<p>continue</p>';
+              // Try to find and click button
+              BUTTON_SELECTORS.forEach(buttonSelector => {
+                if (clicked) return;
                 
-                // Then try different methods to ensure it takes effect
-                editor.textContent = 'continue';
-                
-                // Create and dispatch multiple event types for reliability
-                ['input', 'change', 'keydown', 'keyup'].forEach(eventType => {
-                  const event = new Event(eventType, { bubbles: true });
-                  editor.dispatchEvent(event);
-                });
-                
-                // Wait briefly then click send
-                setTimeout(() => {
-                  sendButton.click();
-                  debugLog('Clicked send button in new UI');
-                  clicked = true;
-                }, 100);
-              } catch (e) {
-                debugLog('Error interacting with editor:', e);
-              }
-            }
-          } catch (e) {
-            debugLog('Error targeting new UI:', e);
-          }
-        }
-        
-        // Fallback method: find all editable areas and buttons
-        if (!clicked) {
-          debugLog('Fallback: searching for any editable area + button');
-          try {
-            const editableElements = [
-              ...document.querySelectorAll('[contenteditable="true"]'),
-              ...document.querySelectorAll('textarea'),
-              ...document.querySelectorAll('[role="textbox"]')
-            ];
-            
-            const buttons = [
-              ...document.querySelectorAll('button'),
-              ...document.querySelectorAll('.anysphere-button'),
-              ...document.querySelectorAll('[role="button"]'),
-              ...document.querySelectorAll('.button-container')
-            ];
-            
-            // Find the visible editable element
-            for (const editable of editableElements) {
-              if (clicked) break;
-              
-              if (isElementVisible(editable)) {
-                debugLog('Found visible editable element:', editable);
-                
-                // Try setting content
                 try {
-                  if (editable.getAttribute('contenteditable') === 'true') {
-                    editable.innerHTML = '<p>continue</p>';
-                    editable.textContent = 'continue';
-                  } else {
-                    editable.value = 'continue';
+                  const button = document.querySelector(buttonSelector);
+                  if (button && isElementVisible(button)) {
+                    debugLog('Found button with selector:', buttonSelector);
+                    setTimeout(() => {
+                      button.click();
+                      clicked = true;
+                      debugLog('Clicked button using selector:', buttonSelector);
+                    }, 100);
                   }
+                } catch (e) {
+                  debugLog('Error finding button with selector', buttonSelector, e);
+                }
+              });
+            }
+          } catch (e) {
+            debugLog('Error with editor selector', editorSelector, e);
+          }
+        });
+        
+        // Previous fallback methods...
+        // ... existing code ...
+        
+        // Add a pattern-based approach that's not dependent on specific class names
+        if (!clicked) {
+          debugLog('Trying pattern-based approach');
+          try {
+            // Look for any input-like element near the bottom of the page
+            const allElements = document.body.querySelectorAll('*');
+            for (let i = allElements.length - 1; i >= 0; i--) {
+              const el = allElements[i];
+              if (clicked) break;
+              
+              // Check if this looks like an input element
+              if ((el.getAttribute('contenteditable') === 'true' || 
+                  el.tagName === 'TEXTAREA' || 
+                  el.getAttribute('role') === 'textbox') && 
+                  isElementVisible(el)) {
+                
+                debugLog('Found potential input element by pattern:', el);
+                setEditorContent(el, 'continue');
+                
+                // Look for nearby buttons
+                let parent = el.parentElement;
+                for (let j = 0; j < 5; j++) { // Check up to 5 levels up
+                  if (!parent) break;
                   
-                  // Dispatch events
-                  ['input', 'change', 'keydown', 'keyup'].forEach(eventType => {
-                    const event = new Event(eventType, { bubbles: true });
-                    editable.dispatchEvent(event);
-                  });
-                  
-                  // Find a nearby button to click
+                  const buttons = parent.querySelectorAll('button, [role="button"], div[tabindex="0"]');
                   for (const button of buttons) {
                     if (isElementVisible(button)) {
-                      debugLog('Found visible button:', button);
+                      debugLog('Found potential button by pattern:', button);
                       setTimeout(() => {
                         button.click();
                         clicked = true;
-                        debugLog('Clicked button');
+                        debugLog('Clicked button found by pattern');
                       }, 100);
                       break;
                     }
                   }
-                } catch (e) {
-                  debugLog('Error with editable element:', e);
+                  
+                  if (clicked) break;
+                  parent = parent.parentElement;
                 }
               }
             }
           } catch (e) {
-            debugLog('Error in editable search:', e);
+            debugLog('Error in pattern-based approach:', e);
           }
         }
         
-        // Helper function to check if element is visible
-        function isElementVisible(el) {
-          if (!el) return false;
-          
+        // Helper function to set content in editor
+        function setEditorContent(editor, text) {
           try {
-            const style = window.getComputedStyle(el);
-            return style.display !== 'none' && 
-                   style.visibility !== 'hidden' && 
-                   style.opacity !== '0' &&
-                   el.offsetWidth > 0 && 
-                   el.offsetHeight > 0;
-          } catch (e) {
-            return false;
-          }
-        }
-        
-        // Final fallback: try to trigger command directly
-        if (!clicked) {
-          debugLog('Final fallback: trying to trigger command directly');
-          try {
-            // Create a custom event on document to try triggering the resume command
-            const commandEvent = new CustomEvent('vscode.command', {
-              detail: { command: 'composer.resumeCurrentChat' },
-              bubbles: true
-            });
-            document.dispatchEvent(commandEvent);
+            if (editor.getAttribute('contenteditable') === 'true') {
+              editor.innerHTML = '<p>' + text + '</p>';
+              editor.textContent = text;
+            } else {
+              editor.value = text;
+            }
             
-            // Try additional command patterns
-            ['resumeCurrentChat', 'composer.resumeCurrentChat', 'cursor.resumeChat'].forEach(cmd => {
-              const cmdEvent = new CustomEvent('vscode.command', {
-                detail: { command: cmd },
-                bubbles: true
-              });
-              document.dispatchEvent(cmdEvent);
+            // Dispatch events
+            ['input', 'change', 'keydown', 'keyup'].forEach(eventType => {
+              const event = new Event(eventType, { bubbles: true });
+              editor.dispatchEvent(event);
             });
+            
+            debugLog('Set editor content to:', text);
           } catch (e) {
-            debugLog('Command event failed:', e);
+            debugLog('Error setting editor content:', e);
           }
         }
+        
+        // ... existing helper functions ...
         
         return clicked;
       }
@@ -753,6 +790,33 @@ function getAutoContScript(waitTimeMs: number): string {
         }, WAIT_TIME_MS);
       }
       
+      // New function to detect changes in overall UI patterns
+      function detectUIPatternChanges() {
+        // Count all elements to detect big changes in UI
+        const currentElementCount = document.body.querySelectorAll('*').length;
+        
+        // Check if element count changed significantly since last check
+        if (Math.abs(currentElementCount - uiState.lastElementCount) > 20) {
+          debugLog('Significant DOM change detected:', {
+            previousCount: uiState.lastElementCount,
+            currentCount: currentElementCount,
+            difference: currentElementCount - uiState.lastElementCount
+          });
+          
+          uiState.lastElementCount = currentElementCount;
+          
+          // Scan document text for tool call patterns when DOM changes significantly
+          const documentText = document.body.textContent || '';
+          for (const indicator of TOOL_CALL_INDICATORS) {
+            if (documentText.includes(indicator)) {
+              debugLog('Found tool call indicator after UI change:', indicator);
+              handleToolCallLimit();
+              break;
+            }
+          }
+        }
+      }
+      
       // Setup observer
       function setupObserver() {
         // Check if observer already exists
@@ -765,32 +829,51 @@ function getAutoContScript(waitTimeMs: number): string {
                           document.querySelector('main') || 
                           document.body;
         
+        // Store initial element count
+        uiState.lastElementCount = document.body.querySelectorAll('*').length;
+        
         window.__AUTO_CONTINUE_OBSERVER = new MutationObserver(mutations => {
           if (isWaiting) return;
           
-          // Check if there are any significant changes that might indicate a tool call limit
           let shouldCheck = false;
           
           for (const mutation of mutations) {
-            // If nodes were added, it might be our message
+            // Check for added nodes
             if (mutation.addedNodes && mutation.addedNodes.length > 0) {
               shouldCheck = true;
-              break;
+              
+              // Check if any new nodes contain tool call text directly
+              for (const node of mutation.addedNodes) {
+                if (node.textContent) {
+                  for (const indicator of TOOL_CALL_INDICATORS) {
+                    if (node.textContent.includes(indicator)) {
+                      debugLog('Tool call text found in added node:', node);
+                      handleToolCallLimit();
+                      return;
+                    }
+                  }
+                }
+              }
             }
             
-            // If attributes changed on relevant elements, check
-            if (mutation.type === 'attributes' && 
-                (mutation.target.classList.contains('markdown-section') || 
-                 mutation.target.classList.contains('markdown-link') ||
-                 mutation.target.classList.contains('anysphere-markdown-container-root'))) {
-              shouldCheck = true;
-              break;
+            // Check for attribute changes on relevant elements
+            if (mutation.type === 'attributes') {
+              const target = mutation.target;
+              if (target instanceof HTMLElement) {
+                // Check if this might be a relevant element
+                for (const selector of LIMIT_INDICATOR_SELECTORS) {
+                  if (target.matches(selector)) {
+                    shouldCheck = true;
+                    break;
+                  }
+                }
+              }
             }
           }
           
           if (shouldCheck) {
-            // Check all the various patterns that might indicate a tool call limit
             checkForToolCallLimit();
+            detectUIPatternChanges();
           }
         });
         
@@ -806,142 +889,10 @@ function getAutoContScript(waitTimeMs: number): string {
       
       // Comprehensive check for tool call limit
       function checkForToolCallLimit() {
-        debugLog('Checking for tool call limit indicators');
-        
-        // 1. Check for specific text patterns anywhere in the document
-        const toolCallIndicators = [
-          'default stop the agent',
-          'stop the agent after',
-          'after 25 tool calls',
-          'tool calls',
-          'resume the conversation',
-          'can resume the conversation',
-          'default stop'
-        ];
-        
-        // Scan entire document for these phrases
-        const documentText = document.body.textContent;
-        if (documentText) {
-          for (const indicator of toolCallIndicators) {
-            if (documentText.includes(indicator)) {
-              debugLog(\`Found tool call indicator text: \${indicator}\`);
-              handleToolCallLimit();
-              return;
-            }
-          }
-        }
-        
-        // 2. Look for specific elements with resume functionality
-        const resumeElement = document.querySelector('.markdown-link[data-link*="resumeCurrentChat"], span.markdown-link');
-        if (resumeElement) {
-          debugLog('Found resume element:', resumeElement);
-          handleToolCallLimit();
-          return;
-        }
-        
-        // 3. Check for any elements with resumeCurrentChat in data-link
-        const resumeLinks = document.querySelectorAll('[data-link*="resumeCurrentChat"], [data-link*="composer.resumeCurrentChat"]');
-        if (resumeLinks.length > 0) {
-          debugLog('Found resume links:', resumeLinks.length);
-          handleToolCallLimit();
-          return;
-        }
-        
-        // 4. Look for specific HTML structure shown in user's example
-        const anysphere = document.querySelector('.anysphere-markdown-container-root');
-        if (anysphere && anysphere.textContent.includes('tool calls')) {
-          debugLog('Found anysphere container with tool calls text');
-          handleToolCallLimit();
-          return;
-        }
-        
-        // 5. Check for content in markdown sections
-        const sections = document.querySelectorAll('.markdown-section, section');
-        for (const section of sections) {
-          const text = section.textContent || '';
-          const rawAttr = section.getAttribute('data-markdown-raw') || '';
-          
-          for (const indicator of toolCallIndicators) {
-            if (text.includes(indicator) || rawAttr.includes(indicator)) {
-              debugLog(\`Found tool call indicator in section: \${indicator}\`);
-              handleToolCallLimit();
-              return;
-            }
-          }
-        }
-        
-        // Additional check for any "resume" text in visible elements
-        document.querySelectorAll('span, a, div, p').forEach(el => {
-          if (el.textContent && 
-              (el.textContent.toLowerCase().includes('resume') || 
-               el.textContent.toLowerCase().includes('continue')) && 
-              isElementVisible(el)) {
-            debugLog('Found element with resume/continue text:', el);
-            handleToolCallLimit();
-            return;
-          }
-        });
+        // ... existing code ...
       }
       
-      // Helper function to check if element is visible
-      function isElementVisible(el) {
-        if (!el) return false;
-        
-        try {
-          const style = window.getComputedStyle(el);
-          return style.display !== 'none' && 
-                 style.visibility !== 'hidden' && 
-                 style.opacity !== '0' &&
-                 el.offsetWidth > 0 && 
-                 el.offsetHeight > 0;
-        } catch (e) {
-          return false;
-        }
-      }
-      
-      // Run on interval to catch any issues with initial detection
-      function runPeriodicChecks() {
-        if (!isWaiting) {
-          checkForToolCallLimit();
-        }
-      }
-      
-      // Create indicator
-      createIndicator();
-      
-      // Setup persistence
-      window.__AUTO_CONTINUE_INTERVAL = setInterval(() => {
-        if (!document.getElementById('auto-continue-indicator')) {
-          createIndicator();
-        }
-        
-        // Try to find the chat container and set up observer if it exists
-        const chatContainer = document.querySelector('.chat-container') || 
-                             document.querySelector('[class*="chat"]') ||
-                             document.querySelector('.anysphere-markdown-container-root') ||
-                             document.querySelector('main');
-        
-        if (chatContainer && !window.__AUTO_CONTINUE_OBSERVER) {
-          setupObserver();
-        }
-        
-        // Run periodic checks for tool call limits
-        runPeriodicChecks();
-      }, 2000);
-      
-      // Initial setup
-      setupObserver();
-      
-      // Check for existing tool call limits immediately
-      setTimeout(checkForToolCallLimit, 500);
-      
-      // Run another check after a short delay to catch any missed elements
-      setTimeout(checkForToolCallLimit, 1500);
-      
-      // Also run a check if user interacts with the page
-      document.addEventListener('click', () => {
-        setTimeout(checkForToolCallLimit, 500);
-      });
+      // ... existing code ...
       
       // Setup a special keyboard shortcut to force resume (for debugging)
       document.addEventListener('keydown', function(e) {
@@ -950,7 +901,56 @@ function getAutoContScript(waitTimeMs: number): string {
           debugLog('Manual resume triggered via keyboard shortcut');
           forceResume();
         }
+        
+        // Ctrl+Alt+D to show detailed DOM inspection
+        if (e.ctrlKey && e.altKey && e.key === 'd') {
+          debugLog('Manual DOM inspection triggered via keyboard shortcut');
+          inspectDOM();
+          
+          // Run detection logic
+          checkForToolCallLimit();
+        }
       });
+      
+      // Create an emergency button for manual intervention
+      function createEmergencyButton() {
+        const wrapper = document.createElement('div');
+        wrapper.id = 'auto-continue-emergency';
+        
+        const button = document.createElement('button');
+        button.textContent = 'RESUME';
+        Object.assign(button.style, {
+          position: 'fixed',
+          bottom: '10px',
+          right: '80px',
+          padding: '4px 8px',
+          backgroundColor: 'rgba(255, 69, 0, 0.9)',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          zIndex: '2147483647',
+          cursor: 'pointer',
+          fontWeight: 'bold',
+          fontSize: '11px'
+        });
+        
+        button.addEventListener('click', () => {
+          debugLog('Emergency resume button clicked');
+          forceResume();
+        });
+        
+        wrapper.appendChild(button);
+        document.body.appendChild(wrapper);
+        debugLog('Added emergency resume button');
+      }
+      
+      // Create indicator
+      createIndicator();
+      
+      // Create emergency button for manual intervention
+      createEmergencyButton();
+      
+      // ... existing code ...
       
       console.log('[Auto-Continue] Extension activated with enhanced detection');
     })();
