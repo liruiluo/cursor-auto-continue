@@ -319,7 +319,14 @@ function getAutoContScript(waitTimeMs: number): string {
         'can resume the conversation',
         'default stop',
         'we default stop',
-        'you can resume'
+        'you can resume',
+        // 中文提示
+        '继续',
+        // 新增"下一步"相关提示
+        '下一步',
+        // 新增"自动"相关提示
+        '自动继续',
+        '帮',
       ];
 
       // Record of UI state for future detection
