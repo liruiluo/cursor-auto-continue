@@ -320,6 +320,9 @@ function getAutoContScript(waitTimeMs: number): string {
         'default stop',
         'we default stop',
         'you can resume',
+        'Connection'
+        'failed'
+        'VPN'
         // 中文提示
         '继续',
         // 新增"下一步"相关提示
